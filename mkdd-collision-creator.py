@@ -1,325 +1,10 @@
 # BCOnvert.py v0.1 by Yoshi2
 
-import time
-import argparse
 import os
-import subprocess
 from re import match
 from struct import pack, unpack
 from math import floor, ceil
 import math
-
-
-def read_remap_file(remap_file):
-
-    remap_data = {}
-    # how it will be represented
-    # identifier is the key, with a tuple (if needed)
-    # then each value is a 3-list with repeated information as needed
-    
-    try:
-        with open(remap_file, "r") as f:
-            lines = f.readlines()                      
-    except FileNotFoundError as e:
-        print(e)
-        return {}
-    for i, line in enumerate(lines):
-        line = line.strip()
-        
-        if line.startswith("#"): #get rid of comments
-            continue
-        line_end = len(line)
-       
-        #find the sound data
-        sound_data = None
-        sound_start = line.find("(")
-        sound_end = line.find(")")
-        
-        if sound_start >0 and sound_end > 0 and sound_start < sound_end:
-            sound_data = line[sound_start + 1: sound_end].split(",")
-            line_end = sound_start
-        
-        # find the identifier
-        equal_sign = line.find("=")
-        if equal_sign == -1:
-            continue
-        identifier = line[0:equal_sign].strip().lower()
-        more_info = line[equal_sign + 1 : line_end].strip(", (")
-        #print(identifier)
-        matname_or_flag = match("^(0x[0-9a-fA-F]{4})?$", identifier)
-        #matname_or_flag = match("^(0x[0-9a-fA-F]{4}),?(\s)*(0x[0-9a-fA-F]{8})?$", identifier)
-        
-        if matname_or_flag is None:
-            #you got the name of an matname - you can expect flag, extra, settings
-            if identifier in remap_data:
-                print("at line " + str(i) + " the material name " + identifier + " is a repeat and will be skipped.")
-                continue
-            if sound_data is not None:
-                print("at line " + str(i) + " there is sound data. it will be ignored.")
-                continue
-                
-            more_info = more_info.split(",")
-            #first one is a flag
-            assert( match( "^(0x[0-9a-fA-F]{4})$", more_info[0] ) is not None)
-
-            if (len(more_info) ) == 1:
-                #if the flag exists (was parsed already), then copy its settings
-                if more_info[0] in remap_data:
-                    more_info.append(remap_data[more_info[0]][0] ) 
-                    more_info.append(remap_data[more_info[0]][1] ) 
-                else: #else, give default values
-                    more_info.append("0")
-                    more_info.append(1)
-                
-            elif len(more_info) == 2:
-                extra_match =  match( "^\s*(0x[0-9a-fA-F]{2})$", more_info[1] )
-                setting_match =  match( "^\s*(0x[0-9a-fA-F]{8})$", more_info[1] )
-                if extra_match is not None:
-                    #you got an extra setting
-                    more_info.append("0")
-                elif setting_match is not None:
-                    more_info.insert(1, 1)
-                    
-            elif len(more_info) == 3:
-                #make sure they are of the correct form
-                assert( match( "^\s*(0x[0-9a-fA-F]{2})$", more_info[1] ) is not None)
-                assert( match( "^\s*(0x[0-9a-fA-F]{8})$", more_info[2] ) is not None)
-                
-                
-            elif (len(more_info)) > 3:
-                print("line with identifier " + identifier + " is not valid and will be skipped")
-                continue
-
-            more_info.append( True)
-            remap_data[identifier] = more_info
-             
-        else:
-            #got a flag
-            flag = matname_or_flag.group(1)
-            flag = flag.lower()
-         
-            addi_info = [0, 1, sound_data]
-            #the identifier is just the flag
-            settings_match = match("^(0x[0-9a-fA-F]{8})", more_info)
-            extra_match = match("(0x[0-9a-fA-F]{2})$", more_info)
-            if settings_match is not None and extra_match is not None:   
-                addi_info[0] = settings_match.group(1)
-                addi_info[1] = extra_match.group(1)
-            elif settings_match is not None:
-                addi_info[0] = settings_match.group(1)
-            elif extra_match is not None:
-                addi_info[1] = extra_match.group(1)
-            else:
-                if sound_data is None:
-                    print("line with flag " + flag + " is not valid and will be skipped")
-                    continue
-
-            if flag in remap_data:
-                raise RuntimeWarning("line " + str(i) + " with flag " + flag + " is has already been specified and will be skipped")
-                continue
-            addi_info.append(False)
-            remap_data[flag] = addi_info
-            """
-            else:
-               
-                flag_settings = (matname_or_flag.group(1), matname_or_flag.group(3) )
-                if sound_data is None:
-                    raise RuntimeWarning("line with identifier " + flag_settings + " is not valid and will be skipped")
-                    continue
-                if flag_settings in remap_data:
-                    raise RuntimeWarning("line with identifier " + flag_settings + " has already shown up, this will be skipped")
-                    continue
-                addi_info = [ matname_or_flag.group(1), matname_or_flag.group(3), sound_data]
-                remap_data[flag_settings] = addi_info
-            """
-
-        
-    print(remap_data)
-    return remap_data
-
-
-def read_vertex(v_data):
-    split = v_data.split("/")
-    #if len(split) == 3:
-    #    vnormal = int(split[2])
-    #else:
-    #    vnormal = None
-    v = int(split[0])
-    return v#, vnormal
-
-
-def read_obj(objfile, remap_data):
-    vertices = []
-    faces = []
-    face_normals = []
-    normals = []
-
-    floor_type = None
-    extra_unknown = None
-    extra_settings = None
-
-    smallest_x = smallest_z = biggest_x = biggest_z = None
-
-
-    for line in objfile:
-        line = line.strip()
-        args = line.split(" ")
-
-        if len(args) == 0 or line.startswith("#"):
-            continue
-        cmd = args[0]
-
-        if cmd == "v":
-            #print(args)
-            for i in range(args.count("")):
-                args.remove("")
-
-            x,y,z = map(float, args[1:4])
-            vertices.append((x,y,z))
-
-            if smallest_x is None:
-                # Initialize values
-                smallest_x = biggest_x = x
-                smallest_z = biggest_z = z
-            else:
-                if x < smallest_x:
-                    smallest_x = x
-                elif x > biggest_x:
-                    biggest_x = x
-                if z < smallest_z:
-                    smallest_z = z
-                elif z > biggest_z:
-                    biggest_z = z
-
-        elif cmd == "f" and floor_type is not None:
-            # if it uses more than 3 vertices to describe a face then we panic!
-            # no triangulation yet.
-            if len(args) == 5:
-                #raise RuntimeError("Model needs to be triangulated! Only faces with 3 vertices are supported.")
-                v1, v2, v3, v4 = map(read_vertex, args[1:5])
-                
-                #faces.append(((v1[0] - 1, v1[1]), (v3[0] - 1, v3[1]), (v2[0] - 1, v2[1])))
-                #faces.append(((v3[0] - 1, v3[1]), (v1[0] - 1, v1[1]), (v4[0] - 1, v4[1])))
-                faces.append((v1, v2, v3, floor_type, extra_unknown, extra_settings))
-                faces.append((v3, v4, v1, floor_type, extra_unknown, extra_settings))
-
-            elif len(args) == 4:
-                v1, v2, v3 = map(read_vertex, args[1:4])
-                #faces.append(((v1[0]-1, v1[1]), (v3[0]-1, v3[1]), (v2[0]-1, v2[1])))
-                faces.append((v1, v2, v3, floor_type, extra_unknown, extra_settings))
-            else:
-                raise RuntimeError("Model needs to be triangulated! Only faces with 3 or 4 vertices are supported.")
-            #if len(args) != 4:
-            #    raise RuntimeError("Model needs to be triangulated! Only faces with 3 vertices are supported.")
-            #v1, v2, v3 = map(read_vertex, args[1:4])
-            
-            #faces.append((v1, v2, v3, floor_type))
-
-        elif cmd == "vn":
-            nx,ny,nz = map(float, args[1:4])
-            normals.append((nx,ny,nz))
-
-        elif cmd == "usemtl":
-            assert len(args) >= 2
-
-            matname = " ".join(args[1:])
-            matname = matname.lower()
-            if matname in remap_data and remap_data[matname][-1]:
-                floor_type = int(remap_data[matname][0], 16)
-                try:
-                    extra_unknown = int(remap_data[matname][1], 16)
-                except:
-                    extra_unknown = remap_data[matname][1]
-                try:
-                    extra_settings = int(remap_data[matname][2], 16)
-                except:
-                    extra_settings = remap_data[matname][2]
-
-                print(matname, floor_type, extra_settings)
-            elif matname in remap_data:
-                floor_type = int(matname, 16)
-                try:
-                    extra_unknown = int(remap_data[matname][1], 16)
-                except:
-                    extra_unknown = remap_data[matname][1]
-                try:
-                    extra_settings = int(remap_data[matname][0], 16)
-                except:
-                    extra_settings = remap_data[matname][0]
-            
-            else:
-                #like a roadtype
-                assert len(args) >= 2
-
-                matname = " ".join(args[1:])
-                matname = matname.lower()
-                
-                #first, check for full matname - roadtype, camera, and extra settings
-                floor_type_match = match("^(.*?)(0x[0-9a-fA-F]{4})_(0x[0-9a-fA-F]{2})_(0x[0-9a-fA-F]{8})(.*?)$", matname)
-
-                if floor_type_match is not None:
-                    floor_type = int(floor_type_match.group(2), 16)
-                    extra_unknown = int(floor_type_match.group(3), 16)
-                    extra_settings = int(floor_type_match.group(4), 16)
-                else:
-                    #next, check for roadtype and extra settings only
-                    floor_type_match = match("^(.*?)(0x[0-9a-fA-F]{4})_(0x[0-9a-fA-F]{8})(.*?)$", matname)
-                    
-                    if floor_type_match is not None:
-                        print("matched on the floortype")
-                        floor_type = int(floor_type_match.group(2), 16)
-                        if floor_type in remap_data and remap_data[floor_type]:
-                            extra_unknown = int(floor_type_match.group(3), 16)
-                        else:
-                            extra_unknown = None
-                        extra_settings = int(floor_type_match.group(3), 16)
-                    else:           
-                        floor_type_match = match("^(.*?)(0x[0-9a-fA-F]{4})(.*?)$", matname)
-
-                        if floor_type_match is not None:
-                            #just the thing
-                            floor_type = int(floor_type_match.group(2), 16)
-                            extra_unknown = None
-                            extra_settings = None
-                        else:
-                            floor_type = None
-                            extra_unknown = None
-                            extra_settings = None
-
-
-            #print("Found material:", matname, "Using floor type:", hex(floor_type))
-
-    #objects.append((current_object, vertices, faces))
-    return vertices, faces, normals, (smallest_x, smallest_z, biggest_x, biggest_z)
-
-
-def create_line(start, end):
-    deltax = end[0]-start[0]
-    deltay = end[1]-start[1]
-    return (start, (deltax, deltay), (deltax**2 + deltay**2)**0.5)
-
-
-def point_is_on_line(point, line):
-    start, delta, length = line
-    if delta[0] == delta[1] == 0:
-        return start[0] == point[0] and start[1] == point[1]
-
-    if delta[0] == 0:
-        a1 = None
-    else:
-        a1 = (point[0]-start[0])/delta[0]
-
-    if delta[1] == 0:
-        a2 = None
-    else:
-        a2 = (point[1] - start[1]) / delta[1]
-
-    if a1 is None:
-        return start[0] == point[0] and 0 <= a2 <= length
-    elif a2 is None:
-        return start[1] == point[1] and 0 <= a1 <= length
-    else:
-        return a1 == a2 and 0 <= a1 <= length
 
 
 def collides(face_v1, face_v2, face_v3, box_mid_x, box_mid_z, box_size_x, box_size_z):
@@ -329,11 +14,6 @@ def collides(face_v1, face_v2, face_v3, box_mid_x, box_mid_z, box_size_x, box_si
     min_z = min(face_v1[2], face_v2[2], face_v3[2]) - box_mid_z
     max_z = max(face_v1[2], face_v2[2], face_v3[2]) - box_mid_z
 
-    """point1 = (face_v1[0] - box_mid_x, face_v1[2] - box_mid_z)
-    point2 = (face_v2[0] - box_mid_x, face_v2[2] - box_mid_z)
-    point3 = (face_v3[0] - box_mid_x, face_v3[2] - box_mid_z)"""
-
-
     half_x = box_size_x / 2.0
     half_z = box_size_z / 2.0
 
@@ -342,32 +22,7 @@ def collides(face_v1, face_v2, face_v3, box_mid_x, box_mid_z, box_size_x, box_si
     if max_z < -half_z or min_z > +half_z:
         return False
 
-    """tri_line1 = create_line(point1, point2)
-    tri_line2 = create_line(point1, point3)
-    tri_line3 = create_line(point2, point3)
-
-    quad_line1 = create_line((-half_x, -half_z), (-half_x, half_z))
-    quad_line2 = create_line((-half_x, -half_z), (half_x, -half_z))
-    quad_line3 = create_line((half_x, half_z), (-half_x, half_z))
-    quad_line4 = create_line((half_x, half_z), (half_x, -half_z))"""
-
     return True
-
-
-def calc_middle(vertices, v1, v2, v3):
-    x1, y1, z1 = vertices[v1]
-    x2, y2, z2 = vertices[v2]
-    x3, y3, z3 = vertices[v3]
-
-    return (x1+x2+x3)/3.0, (y1+y2+y3)/3.0, (z1+z2+z3)/3.0
-
-
-def calc_middle_of_2(vertices, v1, v2):
-    x1, y1, z1 = vertices[v1]
-    x2, y2, z2 = vertices[v2]
-
-    return (x1+x2)/2.0, (y1+y2)/2.0, (z1+z2)/2.0
-
 
 def normalize_vector(v1):
     n = (v1[0]**2 + v1[1]**2 + v1[2]**2)**0.5
@@ -460,12 +115,6 @@ def subdivide_coordinates(startx, startz, endx, endz):
     quadrant10 = (halfx, startz, endx, halfz)
     quadrant01 = (startx, halfz, halfx, endz)
     quadrant11 = (halfx, halfz, endx, endz)
-
-    # x ->
-    # 01 11 ^
-    # 00 10 z
-    # Bottom left is (startx,startz), top right is (endx, endz)
-
     return quadrant00, quadrant10, quadrant01, quadrant11
 
 
@@ -567,95 +216,16 @@ def subdivide_grid(minx, minz,
                            startx, endx, startz, endz,
                            cell_size, quadrants[quadrant], vertices, result)
 
+def export_bco(args, vertices, triangles, grid, sounds):
+    entry_max_tri_count = args["max_quadtree_tri_count"]
+    quadtree_depth = args["quadtree_depth"]
+    remove_steep_faces = args["remove_steep_faces"]
+    cos_steep_face_angle = math.cos(math.radians(args["steep_face_angle"]))
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument("input",
-                        help="Filepath of the wavefront .obj file that will be converted into collision")
-    parser.add_argument("output", default=None, nargs = '?',
-                        help="Output path of the created collision file")
-    parser.add_argument("--cell_size", default=1000, type=int,
-                        help=("Size of a single cell in the grid. Bigger size results in smaller grid size but higher "
-                              "amount of triangles in a single cell."))
-
-    parser.add_argument("--quadtree_depth", default=2, type=int,
-                        help=("Depth of the quadtree structure that's used for optimizing collision detection. "
-                              "Quadtrees are used to subdivide cells in the grid further when a cell has too many "
-                              "triangles."))
-
-    parser.add_argument("--max_tri_count", default=20, type=int,
-                        help=("The maximum amount of triangles a cell or a leaf of a quadtree "
-                              "is allowed to have before it is subdivided further."))
+    smallest_x, smallest_z, biggest_x, biggest_z = grid
     
-    parser.add_argument("--remap_file", default=None, type=str,
-                        help=("Path to file that assigns additional information to materials"))
-                        
-    parser.add_argument("--soundfile", default=None, type=str,
-                        help=("Path to file that assigns additional information to materials"))
-                        
-    parser.add_argument("--steep_faces_as_walls", action="store_true",
-                        help="If set, steep faces that have no collision type asigned to them will become walls")
-                        
-    parser.add_argument("--steep_face_angle", default=89.5, type=float,
-                        help=("Minimum angle from the horizontal in degrees a face needs to have to count as a steep face. "
-                              "Value needs to be between 0 and 90"))
-
-    args = parser.parse_args()
-    input_model = args.input
-    entry_max_tri_count = args.max_tri_count
-    quadtree_depth = args.quadtree_depth
-    steep_faces_as_walls = args.steep_faces_as_walls
-    
-    base_dir = os.path.dirname(input_model)
-
-    if args.output is None:
-        output = input_model + ".bco"
-    else:
-        output = args.output
-    
-    sounds = None 
-    default = None 
-    
-    if not (0 <= args.steep_face_angle <= 90):
-        raise RuntimeError("Steep face angle needs to be between 0 and 90!")
-    
-    cos_steep_face_angle = math.cos(math.radians(args.steep_face_angle))
-
-    remap_data = {}
-    if args.remap_file is not None:
-        remap_data = read_remap_file(args.remap_file)
-
-    if args.soundfile is not None:
-        try:
-            sounds = {}
-            with open(args.soundfile, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    line = line.split("#")[0]
-                    floortype, soundentry = line.split("=")
-                    soundval, unk1, unk2 = soundentry.split(",")
-                    if floortype.lower().strip() == "default" and default is None:
-                        default = (int(soundval,16), int(unk1,16), int(unk2,16))
-                    else:
-                        sounds[int(floortype, 16)] = (int(soundval,16), int(unk1,16), int(unk2,16))
-                    
-        except FileNotFoundError as e:
-            print(e)
-
-    with open(input_model, "r") as f:
-        vertices, triangles, normals, minmax_coords = read_obj(f, remap_data)
-    print(input_model, "loaded")
-    if len(triangles) > 2**16:
-        raise RuntimeError("Too many triangles: {0}\nOnly <=65536 triangles supported!".format(len(triangles)))
-
-    smallest_x, smallest_z, biggest_x, biggest_z = minmax_coords
-
-    assert args.cell_size > 0
-
-    cell_size_x = args.cell_size #1000.0
-    cell_size_z = args.cell_size #1000.0
-
+    cell_size_x = args["cell_size"]
+    cell_size_z = args["cell_size"]
 
     grid_start_x = floor(smallest_x / cell_size_x) * cell_size_x
     grid_start_z = floor(smallest_z / cell_size_z) * cell_size_z
@@ -676,7 +246,6 @@ if __name__ == "__main__":
     grid_size_z = int(grid_size_z)
 
     grid = {}
-    children = []
     print("calculating grid")
 
     def calc_average_height(face):
@@ -694,7 +263,7 @@ if __name__ == "__main__":
     print("grid calculated")
     print("writing bco file")
 
-    with open(output, "wb") as f:
+    with open(args["output"], "wb") as f:
         f.write(b"0003")
         write_ushort(f, grid_size_x)
         write_ushort(f, grid_size_z)
@@ -711,11 +280,7 @@ if __name__ == "__main__":
         write_uint32(f, 0x3456ABCD) # vertices offset
         write_uint32(f, 0x00000000) # unknown section offset
 
-        print(hex(f.tell()))
         assert f.tell() == 0x2C
-
-        grid_offset = 0x2C
-
         groups = []
 
         triangle_group_index = 0
@@ -737,8 +302,6 @@ if __name__ == "__main__":
             for ix in range(grid_size_x):
                 entry = grid[ix][iz]
                 tricount = len(entry)
-                """if tricount >= 120:
-                    raise RuntimeError("Too many triangles in one spot:", tricount)"""
 
                 if tricount > entry_max_tri_count:
                     write_byte(f, 0x00)
@@ -779,9 +342,6 @@ if __name__ == "__main__":
                     triangle_group_index += tricount
                     groups.append(entry)
 
-
-        offset = 0
-
         for i in range(quadtree_depth):
             base_offset += len(remaining_entries)
             new_remaining_entries = []
@@ -809,7 +369,7 @@ if __name__ == "__main__":
                         gridentry = GridEntry()
                         if len(quadrant) > 0:
                             has_tris = True
-                            
+
                         gridentry.coords = coords
                         gridentry.triangles = quadrant
                         gridentry.triangle_index = triangle_group_index
@@ -826,46 +386,25 @@ if __name__ == "__main__":
 
             remaining_entries = new_remaining_entries
 
-            offset = original_length
-            
         print("written grid")
         tri_indices_offset = f.tell()
         for trianglegroup in groups:
             for triangle_index, triangle in trianglegroup:
                 write_ushort(f, triangle_index)
         print("written triangle indices")
-        assert (f.tell() % 4) in (2, 0) 
+        assert (f.tell() % 4) in (2, 0)
         if f.tell() % 4 == 2:
-            write_ushort(f, 0x00) # Padding 
+            write_ushort(f, 0x00) # Padding
         tri_offset = f.tell()
         assert tri_offset % 4 == 0
 
 
         neighbours = {}
-        """for i, triangle in enumerate(triangles):
-            v1_index = triangle[0]
-            v2_index = triangle[1]
-            v3_index = triangle[2]
 
-            indices = [v1_index, v2_index, v3_index] # sort the indices to always have them in the same order
-            indices.sort()
-
-            if i == 0xFFFF:
-                print("Warning: Your collision has a triangle with index 0xFFFF. "
-                      "This might cause unintended side effects related to that specific triangle.")"""
-
-        """ for edge in ((indices[0], indices[1]), (indices[1], indices[2]), (indices[2], indices[0])):
-                if edge not in neighbours:
-                    neighbours[edge] = [i]
-                elif len(neighbours[edge]) == 1:
-                    neighbours[edge].append(i)
-                else:
-                    print("Warning: Edge {0} already has neighbours {1}, but there is an additional "
-                          "neighbour {2} that will be ignored.".format(edge, neighbours[edge], i))"""
-        
         floor_sound_types = {}
-        
+
         for i, triangle in enumerate(triangles):
+            print(i, triangle)
             v1_index = triangle[0]
             v2_index = triangle[1]
             v3_index = triangle[2]
@@ -879,23 +418,18 @@ if __name__ == "__main__":
             v3 = vertices[v3_index-1]
 
             v1tov2 = create_vector(v1,v2)
-            v2tov3 = create_vector(v2,v3)
-            v3tov1 = create_vector(v3,v1)
             v1tov3 = create_vector(v1,v3)
 
             cross_norm = cross_product(v1tov2, v1tov3)
-            #cross_norm = cross_product(v1tov2, v1tov3)
 
             if cross_norm[0] == cross_norm[1] == cross_norm[2] == 0.0:
                 norm = cross_norm
-                norm_fail = True 
                 print(cross_norm)
                 print(v1tov2, v1tov3)
                 print("Triangle:", v1, v2, v3)
                 print("norm calculation failed")
             else:
                 norm = normalize_vector(cross_norm)
-                norm_fail = False
 
             norm_x = int(round(norm[0], 4) * 10000)
             norm_y = int(round(norm[1], 4) * 10000)
@@ -904,16 +438,16 @@ if __name__ == "__main__":
             midx = (v1[0]+v2[0]+v3[0])/3.0
             midy = (v1[1]+v2[1]+v3[1])/3.0
             midz = (v1[2]+v2[2]+v3[2])/3.0
-            
+
             if floor_type is None:
                 continue
 
             if extra_settings is None:
                 extra_settings = 0
-            
+
             if extra_unknown is None:
                 extra_unknown = 0x01
-            
+
 
             floatval = (-1)*(round(norm[0], 4) * midx + round(norm[1], 4) * midy + round(norm[2], 4) * midz)
 
@@ -943,12 +477,12 @@ if __name__ == "__main__":
                         local_neighbours.append(0xFFFF)
                 else:
                     local_neighbours.append(0xFFFF)
-            
+
             start = f.tell()
 
-            write_uint32(f, v1_index-1)
-            write_uint32(f, v2_index-1)
-            write_uint32(f, v3_index-1)
+            write_uint32(f, v1_index)
+            write_uint32(f, v2_index)
+            write_uint32(f, v3_index)
 
             write_float(f, floatval)
 
@@ -966,11 +500,8 @@ if __name__ == "__main__":
             write_ushort(f, 0xFFFF)#local_neighbours[0]) # Triangle index, 0xFFFF means no triangle reference
             write_ushort(f, 0xFFFF) #local_neighbours[1]) # Triangle index
             write_ushort(f, 0xFFFF) #local_neighbours[2]) # Triangle index
-            #write_ushort(f, local_neighbours[0]) # Triangle index, 0xFFFF means no triangle reference
-            #write_ushort(f, local_neighbours[1]) # Triangle index
-            #write_ushort(f, local_neighbours[2]) # Triangle index
 
-            write_uint32(f, extra_settings) 
+            write_uint32(f, extra_settings)
             end = f.tell()
             assert (end-start) == 0x24
 
@@ -992,23 +523,12 @@ if __name__ == "__main__":
         write_uint32(f, unknown_offset)  # unknown section offset
         f.seek(unknown_offset)
 
-        for soundtype in sorted(floor_sound_types.keys()):
-            write_ushort(f, soundtype)  # floortype
-
-            
-            if soundtype in remap_data and remap_data[soundtype][1] is not None:
-                sound, unk1, unk2 = remap_data[soundtype][1]
-            elif sounds is not None and soundtype in sounds:
-                sound, unk1, unk2 = sounds[soundtype]
-            elif default is not None:
-                sound, unk1, unk2 = default 
-            else:
-                sound, unk1, unk2 = 0x2, 0, 0
-            write_short(f, sound)  # Sound to be played?
-            write_uint32(f, unk1)
-            write_uint32(f, unk2)
+        for sound in sounds:
+            write_byte(f, sound[0])  # floortype
+            write_byte(f, sound[1])  # subfloortype
+            write_short(f, sound[2])  # Sound to be played?
+            write_uint32(f, 0)
+            write_uint32(f, 0)
 
         f.seek(0x18)
         write_ushort(f, len(floor_sound_types))
-
-    print("done, file written to", output)

@@ -51,7 +51,6 @@ class BCOTriangle(object):
 
         return tri
 
-
 class SoundValue:
     def __init__(self, col_flag, col_attr, sound_value, unk1, unk2):
         self.col_flag = col_flag
@@ -64,6 +63,7 @@ class SoundValue:
     def from_file(cls, f):
         col_flag, col_attr, sound_value, int1, int2 = unpack_from(">BBHII", f.read(0xC), 0)
         return cls(col_flag, col_attr, sound_value, int1, int2)
+
 
 class RacetrackCollision(object):
     def __init__(self):
@@ -87,6 +87,25 @@ class RacetrackCollision(object):
         self.grids = []
         self.triangles = []
         self.vertices = []
+
+    def get_python_vertices(self, rotate_poster=True, scale = 1.0):
+        vertices = []
+        for vertex in self.vertices:
+            x, y, z = vertex
+            new_vertex = (x * scale, y * scale, z * scale)
+            if rotate_poster:
+                new_vertex = (new_vertex[0], -new_vertex[2], new_vertex[1])
+            vertices.append(new_vertex)
+
+        return vertices
+
+    def get_python_faces_materials(self):
+        faces = []
+        materials = []
+        for triangle in self.triangles:
+            faces.append([triangle.v1, triangle.v2, triangle.v3])
+            materials.append((triangle.floor_type, triangle.camera_code, triangle.settings))
+        return faces, materials
 
     def load_file(self, f):
         data = f.read()
