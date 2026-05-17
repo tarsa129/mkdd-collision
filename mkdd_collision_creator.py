@@ -131,9 +131,9 @@ def subdivide_cell(cell_start_x, cell_start_z, cell_end_x, cell_end_z, triangles
         for j, face in triangles:
             v1_index, v2_index, v3_index = face
 
-            v1 = vertices[v1_index - 1]
-            v2 = vertices[v2_index - 1]
-            v3 = vertices[v3_index - 1]
+            v1 = vertices[v1_index]
+            v2 = vertices[v2_index]
+            v3 = vertices[v3_index]
 
             if collides(v1, v2, v3,
                         midx,
@@ -191,9 +191,9 @@ def subdivide_grid(minx, minz,
     for i, face in triangles:
         v1_index, v2_index, v3_index = face
 
-        v1 = vertices[v1_index - 1]
-        v2 = vertices[v2_index - 1]
-        v3 = vertices[v3_index - 1]
+        v1 = vertices[v1_index]
+        v2 = vertices[v2_index]
+        v3 = vertices[v3_index]
 
         for quadrant, startx, endx, startz, endz in coordinates:
             if quadrant not in skip:
@@ -246,12 +246,11 @@ def export_bco(args, vertices, triangles, grid, sounds):
     grid_size_z = int(grid_size_z)
 
     grid = {}
-    print("calculating grid")
 
     def calc_average_height(face):
-        return (vertices[face[0] - 1][1]+
-                vertices[face[1] - 1][1]+
-                vertices[face[2] - 1][1])/3.0
+        return (vertices[face[0]][1]+
+                vertices[face[1]][1]+
+                vertices[face[2]][1])/3.0
 
     triangles.sort(key=calc_average_height, reverse=True)
 
@@ -260,8 +259,6 @@ def export_bco(args, vertices, triangles, grid, sounds):
                    0, grid_size_x, 0, grid_size_z, cell_size_x,
                    triangles_indexed, vertices,
                    grid)
-    print("grid calculated")
-    print("writing bco file")
 
     with open(args["output"], "wb") as f:
         f.write(b"0003")
@@ -404,7 +401,6 @@ def export_bco(args, vertices, triangles, grid, sounds):
         floor_sound_types = {}
 
         for i, triangle in enumerate(triangles):
-            print(i, triangle)
             v1_index = triangle[0]
             v2_index = triangle[1]
             v3_index = triangle[2]
@@ -413,9 +409,9 @@ def export_bco(args, vertices, triangles, grid, sounds):
             extra_unknown = triangle[4]
             extra_settings = triangle[5]
 
-            v1 = vertices[v1_index-1]
-            v2 = vertices[v2_index-1]
-            v3 = vertices[v3_index-1]
+            v1 = vertices[v1_index]
+            v2 = vertices[v2_index]
+            v3 = vertices[v3_index]
 
             v1tov2 = create_vector(v1,v2)
             v1tov3 = create_vector(v1,v3)
@@ -424,10 +420,6 @@ def export_bco(args, vertices, triangles, grid, sounds):
 
             if cross_norm[0] == cross_norm[1] == cross_norm[2] == 0.0:
                 norm = cross_norm
-                print(cross_norm)
-                print(v1tov2, v1tov3)
-                print("Triangle:", v1, v2, v3)
-                print("norm calculation failed")
             else:
                 norm = normalize_vector(cross_norm)
 
@@ -531,4 +523,4 @@ def export_bco(args, vertices, triangles, grid, sounds):
             write_uint32(f, 0)
 
         f.seek(0x18)
-        write_ushort(f, len(floor_sound_types))
+        write_ushort(f, len(sounds))
