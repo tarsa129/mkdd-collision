@@ -52,6 +52,19 @@ class BCOTriangle(object):
         return tri
 
 
+class SoundValue:
+    def __init__(self, col_flag, col_attr, sound_value, unk1, unk2):
+        self.col_flag = col_flag
+        self.col_attr = col_attr
+        self.sound_value = sound_value
+        self.unk1 = unk1
+        self.unk2 = unk2
+
+    @classmethod
+    def from_file(cls, f):
+        col_flag, col_attr, sound_value, int1, int2 = unpack_from(">BBHII", f.read(0xC), 0)
+        return cls(col_flag, col_attr, sound_value, int1, int2)
+
 class RacetrackCollision(object):
     def __init__(self):
         self._data = None
@@ -137,8 +150,7 @@ class RacetrackCollision(object):
         self.matentries = []
 
         for i in range(self.entrycount):
-            floor_type, unk, int1, int2 = unpack_from(">HHII", f.read(0xC), 0)
-            self.matentries.append((floor_type, unk, int1, int2))
+            self.matentries.append( SoundValue.from_file(f) )
 
 
 
