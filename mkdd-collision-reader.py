@@ -42,12 +42,12 @@ class BCOTriangle(object):
         tri.norm_z = read_uint16(triangle_data, 0x14)
         tri.floor_type = read_uint16(triangle_data, 0x16)
         tri.minmax_lookup = read_uint8(triangle_data, 0x18)
-        tri.unknown = read_uint8(triangle_data, 0x19)
+        tri.camera_code = read_uint8(triangle_data, 0x19)
         tri.n1 = read_uint16(triangle_data, 0x1A)
         tri.n2 = read_uint16(triangle_data, 0x1C)
         tri.n3 = read_uint16(triangle_data, 0x1E)
 
-        tri.unknown2 = read_uint32(triangle_data, 0x20)
+        tri.settings = read_uint32(triangle_data, 0x20)
 
         return tri
 
@@ -205,7 +205,7 @@ def create_col(f, soundfile, mkdd_collision, soundfile_format = False):
 
             f.write("f {0} {1} {2}\n".format(tri.v1+1,tri.v2+1,tri.v3+1))
             i += 1
-    
+
     if soundfile_format:
         for entry in mkdd_collision.matentries:
             soundfile.write("0x{:04X}=0x{:X}, 0x{:X}, 0x{:X}\n".format(*entry))
