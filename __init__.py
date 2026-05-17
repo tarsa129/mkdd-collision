@@ -13,10 +13,10 @@ from bpy_extras.io_utils import ImportHelper, ExportHelper
 import re
 import os
 
-bco_reader = bpy.data.texts["mkdd-collision-reader"].as_module()
-bco_writer = bpy.data.texts["mkdd-collision-writer"].as_module()
-#from . import bco_reader
-#from . import bco_writer
+#bco_reader = bpy.data.texts["mkdd-collision-reader"].as_module()
+#bco_writer = bpy.data.texts["mkdd-collision-writer"].as_module()
+from . import mkdd_collision_reader as bco_reader
+from . import mkdd_collision_creator as bco_writer
 
 def dummyBCOFunction(self,context):
     active=context.active_object
