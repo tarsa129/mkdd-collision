@@ -401,7 +401,7 @@ class export_bco_file(bpy.types.Operator, ExportHelper):
             if sound_values not in sounds_map:
                 sounds_map[sound_values] = 0
         for item in mkdd_bco_tool.sound_values:
-            sounds[(item.col_flag, item.col_attribute)] = item.sound_value
+            sounds[(item.col_flag, item.col_attr)] = item.sound_value
         sounds = [(key[0], key[1], value) for key,value in sounds_map.items()]
 
         args = {"output":self.filepath,
