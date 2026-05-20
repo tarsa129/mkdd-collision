@@ -19,3 +19,7 @@ Additional options are for:
 Converts .bco files to .obj, and gives a _sound.txt file as well with all the sounds. The most basic usage is to drag an .obj file into the .py file, and an .obj file will be created. The .obj will have the same name as the .bco file, but with .obj added to the end.
 Additional options are for:
 * specifying an output file
+
+
+## Credits
+The Blender plugin component uses code from [Gabriela's Blender MKW Utilities](https://github.com/Gabriela-Orzechowska/Blender-MKW-Utilities). It copies the core functionality and several Python Blender plugin setups, like the "dummyBCOFunction" function, registering/unregistering of classes, and import/export setups. However, most of the internal logic is unique to this program.
