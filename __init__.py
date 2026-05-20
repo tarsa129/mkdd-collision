@@ -15,8 +15,10 @@ import os
 
 #bco_reader = bpy.data.texts["mkdd-collision-reader"].as_module()
 #bco_writer = bpy.data.texts["mkdd-collision-writer"].as_module()
+#bco_sound_values = bpy.data.texts["mkdd-sound-values"].as_module()
 from . import mkdd_collision_reader as bco_reader
 from . import mkdd_collision_creator as bco_writer
+from . import mkdd_sound_values as bco_sound_values
 
 def dummyBCOFunction(self,context):
     active=context.active_object
@@ -84,34 +86,10 @@ def get_or_create_material(matname):
         principled.inputs["Base Color"].default_value = collision_color
     return material
 
-class SoundValueProperties(bpy.types.PropertyGroup):
-    col_flag: EnumProperty(name = "Flags",
-        items = [("0x00", "0x00", ""),
-                 ("0x01", "0x01", ""),
-                 ("0x02", "0x02", ""),
-                 ("0x03", "0x03", ""),
-                 ("0x04", "0x04", ""),
-                 ("0x05", "0x05", ""),
-                 ("0x06", "0x06", ""),
-                 ("0x07", "0x07", ""),
-                 ("0x08", "0x08", ""),
-                 ("0x09", "0x09", ""),
-                 ("0x0A", "0x0A", ""),
-                 ("0x0B", "0x0B", ""),
-                 ("0x0C", "0x0C", ""),
-                 ("0x0D", "0x0D", ""),
-                 ("0x0E", "0x0E", ""),
-                 ("0x0F", "0x0F", ""),
-                 ("0x10", "0x10", ""),
-                 ("0x11", "0x11", ""),
-                 ("0x12", "0x12", ""),
-                 ("0x13", "0x13d", ""),
-                 ("0x37", "0x37", ""),
-                 ("0x47", "0x47", "")],
-        update = dummyBCOFunction,
-        default = "0x01")
-    col_attribute: IntProperty(name = "sound_id", min=0, max=255, default=0)
-    sound_id: IntProperty(name = "sound_id", min=0, max=255, default=0)
+def get_collision_materials():
+    collision_materials = [read_material_flag(material.name) for material in bpy.data.materials]
+    collision_materials = list(filter(lambda x: x is not None, collision_materials))
+    return collision_materials
 
 class BCOProperties(bpy.types.PropertyGroup):
     track_slots: EnumProperty(name = "Slots",
@@ -179,7 +157,7 @@ class BCOProperties(bpy.types.PropertyGroup):
     geosplash_id: IntProperty(name="Geosplash ID", min=0, max=255, default=0)
 
     #Sound Values
-    sound_values: CollectionProperty(type=SoundValueProperties)
+    sound_values: CollectionProperty(type=bco_sound_values.SoundValueProperties)
 
 class import_bco_file(bpy.types.Operator, ImportHelper):
     bl_idname = "bco.import_bco"
@@ -261,13 +239,12 @@ class import_bco_file(bpy.types.Operator, ImportHelper):
 
         self.assign_collision_materials(collision_object, materials)
         collision_mesh.update()
-
+        
+        imported_sound_entries = {}
         for sound in col.matentries:
-            new_item = mkdd_bco_tool.sound_values.add()
-            new_item.col_flag = f"0x{sound.col_flag:0{2}X}"
-            new_item.col_attribute = sound.col_attr
-            new_item.sound_id = sound.sound_value
-
+            imported_sound_entries[(f"{sound.col_flag:0{2}X}",f"{sound.col_attr:0{2}X}")] = sound.sound_value        
+        bco_sound_values.sync_sound_values(mkdd_bco_tool, get_collision_materials(), imported_sound_entries)
+        
         bpy.context.scene.collection.objects.link(collision_object)
         return {'FINISHED'}
 
@@ -423,48 +400,11 @@ class match_sound_with_used(bpy.types.Operator):
     bl_options = {'UNDO'}
     bl_description = "Match with used flags"
 
-    def get_collision_materials(self):
-        used_collision_flags = set()
-        for material in bpy.data.materials:
-            col_props =  read_material_flag(material.name)
-            if col_props:
-                used_collision_flags.add((col_props[0], col_props[1]))
-        return used_collision_flags
-
-    def get_defined_sound_ids(self, mkdd_bco_tool):
-        sound_values = {}
-        for item in mkdd_bco_tool.sound_values:
-            col_flag = item.col_flag[2:]
-            col_attr = f"{item.col_attribute:0{2}X}"
-            sound_values[(col_flag, col_attr)] = item.sound_id
-        return sound_values
-
-    def combine_sound_flags(self, used_collision_flags, defined_sound_ids):
-        final_sound_ids = []
-        for col_flag in used_collision_flags:
-            sound_id = 0
-            if col_flag in defined_sound_ids:
-                sound_id = defined_sound_ids[col_flag]
-            final_sound_ids.append((col_flag[0], col_flag[1], sound_id))
-        final_sound_ids.sort()
-        return final_sound_ids
-
-
     def execute(self, context):
         scene = context.scene
         mkdd_bco_tool = scene.mkdd_bco_tool
-
-        used_collision_flags = self.get_collision_materials()
-        defined_sound_ids = self.get_defined_sound_ids(mkdd_bco_tool)
-        final_sound_ids = self.combine_sound_flags(used_collision_flags, defined_sound_ids)
-
-        mkdd_bco_tool.sound_values.clear()
-        for final_sound_id in final_sound_ids:
-            new_item = mkdd_bco_tool.sound_values.add()
-            new_item.col_flag = "0x" + final_sound_id[0]
-            new_item.col_attr = int(final_sound_id[1])
-            new_item.sound_id = final_sound_id[2]
-
+        
+        bco_sound_values.sync_sound_values(mkdd_bco_tool, get_collision_materials())
         return {'FINISHED'}
 
 class add_sound_type(bpy.types.Operator):
@@ -656,7 +596,7 @@ class BCOUtilities(bpy.types.Panel):
 def menu_func(self, context):
     self.layout.operator(BCOUtilities.bl_idname)
 
-classes = (import_bco_file, export_bco_file, match_sound_with_used, add_sound_type, SoundValueProperties, BCOProperties, BCOUtilities, BCOAdvancedOptions, apply_bco_flag, BCOSoundTypes)
+classes = (import_bco_file, export_bco_file, match_sound_with_used, add_sound_type, bco_sound_values.SoundValueProperties, BCOProperties, BCOUtilities, BCOAdvancedOptions, apply_bco_flag, BCOSoundTypes)
 
 def register():
     for cls in classes:
