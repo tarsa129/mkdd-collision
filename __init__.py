@@ -13,12 +13,13 @@ from bpy_extras.io_utils import ImportHelper, ExportHelper
 import re
 import os
 
-#bco_reader = bpy.data.texts["mkdd-collision-reader"].as_module()
-#bco_writer = bpy.data.texts["mkdd-collision-writer"].as_module()
-#bco_sound_values = bpy.data.texts["mkdd-sound-values"].as_module()
-from . import mkdd_collision_reader as bco_reader
-from . import mkdd_collision_creator as bco_writer
-from . import mkdd_sound_values as bco_sound_values
+bco_reader = bpy.data.texts["mkdd-collision-reader"].as_module()
+bco_writer = bpy.data.texts["mkdd-collision-writer"].as_module()
+bco_sound_values = bpy.data.texts["mkdd-sound-values"].as_module()
+#from . import mkdd_collision_reader as bco_reader
+#from . import mkdd_collision_creator as bco_writer
+#from . import mkdd_sound_values as bco_sound_values
+
 
 def dummyBCOFunction(self,context):
     active=context.active_object
@@ -280,7 +281,7 @@ class export_bco_file(bpy.types.Operator, ExportHelper):
 
     bco_remove_steep_faces: BoolProperty(name="Remove steep faces", default=True, description="If set, remove steep faces from being exported")
     bco_steep_face_angle: FloatProperty(name="Steep Face Angle", default=89.5, max=90, min=0, description="Minimum angle from the horizontal in degrees a face needs to have to count as a steep face.")
-    bco_cell_size: IntProperty(name="Cell Size", default=100, max=100000, min=1, description="Size of a single cell in the grid. Bigger size results in smaller grid size but higher amount of triangles in a single cell")
+    bco_cell_size: IntProperty(name="Cell Size", default=1000, max=100000, min=1, description="Size of a single cell in the grid. Bigger size results in smaller grid size but higher amount of triangles in a single cell")
     bco_quadtree_depth: IntProperty(name="Quadtree Depth", default=2, max=10, min=1, description="Depth of the quadtree structure that's used for optimizing collision detection. "
                               "Quadtrees are used to subdivide cells in the grid further when a cell has too many triangles.")
     bco_max_tri_count: IntProperty(name="Max Quadtree Tri Count", default=20, max=100, min=1, description="The maximum amount of triangles a cell or a leaf of a quadtree is allowed to have before it is subdivided further.")
@@ -369,17 +370,9 @@ class export_bco_file(bpy.types.Operator, ExportHelper):
             grid[2] = max(grid[2], vertex[0])
             grid[3] = max(grid[3], vertex[2])
 
-        sounds_map = {}
-        for material in bpy.data.materials:
-            col_props = read_material_flag(material.name)
-            if not col_props:
-                continue
-            sound_values = (int(col_props[0], 16), int(col_props[1], 16))
-            if sound_values not in sounds_map:
-                sounds_map[sound_values] = 0
-        for item in mkdd_bco_tool.sound_values:
-            sounds[(item.col_flag, item.col_attr)] = item.sound_value
-        sounds = [(key[0], key[1], value) for key,value in sounds_map.items()]
+        used_collision_flags = [(col_props[0], col_props[1]) for col_props in get_collision_materials()]
+        final_sounds = bco_sound_values.combine_sound_flags(used_collision_flags, bco_sound_values.get_defined_sound_ids(mkdd_bco_tool))
+        sounds = [(int(final_sound[0], 16), int(final_sound[1], 16), final_sound[2]) for final_sound in final_sounds]
 
         args = {"output":self.filepath,
                 "remove_steep_faces": self.bco_remove_steep_faces, "steep_face_angle": self.bco_steep_face_angle,
