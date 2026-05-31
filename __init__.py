@@ -611,12 +611,33 @@ class get_current_flag(bpy.types.Operator):
     bl_label = "Get Current Flag"
     bl_description = "Gets the currently selected flag"
 
-
     @classmethod
     def poll(cls,context):
         return get_current_material(context) is not None
 
     def execute(self, context):
+        scene = context.scene
+        mkdd_bco_tool = scene.mkdd_bco_tool
+        
+        current_material = get_current_material(context)
+        if not current_material:
+            return {'CANCELLED'}
+            
+        mkdd_bco_tool.bco_flags = f"0x{current_material[bco_flag_index]}"
+        
+        if mkdd_bco_tool.bco_flags in particle_coltypes:
+            mkdd_bco_tool.effect_material = int(current_material[bco_attribute_index], 16)
+        elif mkdd_bco_tool.bco_flags in respawn_coltypes:
+            mkdd_bco_tool.jugem_point = int(current_material[bco_attribute_index], 16)
+        else:
+            mkdd_bco_tool.other_attr = int(current_material[bco_attribute_index], 16)
+            
+        mkdd_bco_tool.camera_code = f"0x{current_material[bco_camera_code_index]}"
+        mkdd_bco_tool.thickness_value = int(current_material[bco_thickness_index], 16)
+        mkdd_bco_tool.disallow_items = int(current_material[bco_itemvalid_index], 16) > 0
+        mkdd_bco_tool.stagger_code = int(current_material[bco_stagger_index], 16) > 0
+        mkdd_bco_tool.spiral_code = int(current_material[bco_spiral_index], 16) > 0
+        mkdd_bco_tool.geosplash_id = int(current_material[bco_geosplash_index], 16)
         return {'FINISHED'}
 
 class BCOGetFlag(bpy.types.Panel):
