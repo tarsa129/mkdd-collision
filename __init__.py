@@ -88,7 +88,7 @@ def get_or_create_material(matname):
     material = bpy.data.materials.get(matname)
     if material is None:
         material = bpy.data.materials.new(name=matname)
-        collision_color = get_collision_color(f"0x{material_data[0]}")
+        collision_color = get_collision_color(f"0x{material_data[bco_flag_index]}")
         print(collision_color)
         material.diffuse_color = collision_color
         principled = material.node_tree.nodes["Principled BSDF"]
