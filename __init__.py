@@ -172,31 +172,31 @@ def get_current_material(context):
     selected_objects = context.selected_objects
     if not selected_objects:
         return None
-    
+
     current_mode = bpy.context.object.mode
     if current_mode == "EDIT":
         selected_material = None
-        
+
         for selected_object in selected_objects:
             bm = bmesh.from_edit_mesh(selected_object.data)
             bm.faces.ensure_lookup_table()
-            
+
             selected_faces = [i for i, face in enumerate(bm.faces) if face.select]
             if not selected_faces:
                 continue
-            
+
             selected_object_materials = [slot.material for slot in selected_object.material_slots]
             selected_object_matindex = bm.faces[selected_faces[0]].material_index
-            
+
             if selected_material and selected_material != selected_object_materials[selected_object_matindex]:
                 return None
             elif not selected_material:
                 selected_material = selected_object_materials[selected_object_matindex]
-            
+
             for i in selected_faces:
                 if selected_object_matindex != bm.faces[i].material_index:
                     return None
-            
+
             return read_material_flag(selected_material.name)
     else:
         all_materials = []
@@ -206,7 +206,7 @@ def get_current_material(context):
         all_col_mats = list(filter(lambda x: x is not None, all_materials_info))
         if len(all_col_mats) == 1:
             return all_col_mats[0]
-        return None 
+        return None
 
 class import_bco_file(bpy.types.Operator, ImportHelper):
     bl_idname = "bco.import_bco"
@@ -288,12 +288,12 @@ class import_bco_file(bpy.types.Operator, ImportHelper):
 
         self.assign_collision_materials(collision_object, materials)
         collision_mesh.update()
-        
+
         imported_sound_entries = {}
         for sound in col.matentries:
-            imported_sound_entries[(f"{sound.col_flag:0{2}X}",f"{sound.col_attr:0{2}X}")] = sound.sound_value        
+            imported_sound_entries[(f"{sound.col_flag:0{2}X}",f"{sound.col_attr:0{2}X}")] = sound.sound_value
         bco_sound_values.sync_sound_values(mkdd_bco_tool, get_collision_materials(), imported_sound_entries)
-        
+
         bpy.context.scene.collection.objects.link(collision_object)
         return {'FINISHED'}
 
@@ -444,7 +444,7 @@ class match_sound_with_used(bpy.types.Operator):
     def execute(self, context):
         scene = context.scene
         mkdd_bco_tool = scene.mkdd_bco_tool
-        
+
         bco_sound_values.sync_sound_values(mkdd_bco_tool, get_collision_materials())
         return {'FINISHED'}
 
@@ -610,7 +610,7 @@ class get_current_flag(bpy.types.Operator):
     bl_idname = "bco.get_current_flag"
     bl_label = "Get Current Flag"
     bl_description = "Gets the currently selected flag"
-    
+
 
     @classmethod
     def poll(cls,context):
@@ -633,10 +633,8 @@ class BCOGetFlag(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        scene = context.scene
-        
         column = layout.column()
-        
+
         current_material = get_current_material(context)
         if current_material:
             column.label(text=f"Flag: 0x{current_material[bco_flag_index]}")
