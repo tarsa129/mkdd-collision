@@ -160,6 +160,46 @@ class BCOProperties(bpy.types.PropertyGroup):
     #Sound Values
     sound_values: CollectionProperty(type=bco_sound_values.SoundValueProperties)
 
+def get_current_material(context):
+    selected_objects = context.selected_objects
+    if not selected_objects:
+        return None
+    
+    current_mode = bpy.context.object.mode
+    if current_mode == "EDIT":
+        selected_material = None
+        
+        for selected_object in selected_objects:
+            bm = bmesh.from_edit_mesh(selected_object.data)
+            bm.faces.ensure_lookup_table()
+            
+            selected_faces = [i for i, face in enumerate(bm.faces) if face.select]
+            if not selected_faces:
+                continue
+            
+            selected_object_materials = [slot.material for slot in selected_object.material_slots]
+            selected_object_matindex = bm.faces[selected_faces[0]].material_index
+            
+            if selected_material and selected_material != selected_object_materials[selected_object_matindex]:
+                return None
+            elif not selected_material:
+                selected_material = selected_object_materials[selected_object_matindex]
+            
+            for i in selected_faces:
+                if selected_object_matindex != bm.faces[i].material_index:
+                    return None
+            
+            return read_material_flag(selected_material.name)
+    else:
+        all_materials = []
+        for selected_object in selected_objects:
+            all_materials.extend([slot.material for slot in selected_object.material_slots])
+        all_materials_info = [read_material_flag(material.name) for material in all_materials]
+        all_col_mats = list(filter(lambda x: x is not None, all_materials_info))
+        if len(all_col_mats) == 1:
+            return all_col_mats[0]
+        return None 
+
 class import_bco_file(bpy.types.Operator, ImportHelper):
     bl_idname = "bco.import_bco"
     bl_label = "Import BCO"
@@ -558,6 +598,38 @@ class BCOAdvancedOptions(bpy.types.Panel):
         layout.prop(mkdd_bco_tool, "geosplash_id", text="Geosplash Id")
 
 
+class get_current_flag(bpy.types.Operator):
+    bl_idname = "bco.get_current_flag"
+    bl_label = "Get Current Flag"
+    bl_description = "Gets the currently selected flag"
+    
+
+    @classmethod
+    def poll(cls,context):
+        return get_current_material(context) is not None
+
+    def execute(self, context):
+        return {'FINISHED'}
+
+class BCOGetFlag(bpy.types.Panel):
+    bl_label = "Get Current Flag"
+    bl_idname = "MKDD_PT_Bco_Helper_GetFlag"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "MKDD Utils"
+    bl_parent_id = "MKDD_PT_Bco_Helper"
+
+    def draw_header(self, _):
+        layout = self.layout
+        layout.label(text="", icon='FACESEL')
+
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+        mkdd_bco_tool = scene.mkdd_bco_tool
+        
+        layout.operator("bco.get_current_flag")
+
 class BCOUtilities(bpy.types.Panel):
     bl_label = "BCO Utilities"
     bl_idname = "MKDD_PT_Bco_Helper"
@@ -589,7 +661,7 @@ class BCOUtilities(bpy.types.Panel):
 def menu_func(self, context):
     self.layout.operator(BCOUtilities.bl_idname)
 
-classes = (import_bco_file, export_bco_file, match_sound_with_used, add_sound_type, bco_sound_values.SoundValueProperties, BCOProperties, BCOUtilities, BCOAdvancedOptions, apply_bco_flag, BCOSoundTypes)
+classes = (import_bco_file, export_bco_file, match_sound_with_used, add_sound_type, bco_sound_values.SoundValueProperties, BCOProperties, BCOUtilities, BCOAdvancedOptions,  get_current_flag, BCOGetFlag,  apply_bco_flag, BCOSoundTypes)
 
 def register():
     for cls in classes:
