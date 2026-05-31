@@ -51,6 +51,14 @@ bco_material_name_regex = "^0x([0-9A-F]{2})([0-9A-F]{2})_0x([0-9A-F]{2})_0x([0-9
 bco_material_name_matcher = re.compile(bco_material_name_regex)
 
 bco_material_data_len = 8
+bco_flag_index = 0
+bco_attribute_index = 1
+bco_camera_code_index = 2
+bco_thickness_index = 3
+bco_itemvalid_index = 4
+bco_stagger_index = 5
+bco_spiral_index = 6
+bco_geosplash_index = 7
 def read_material_flag(material_name):
     if not material_name.startswith(bco_material_name_prefix):
         return None
@@ -626,9 +634,24 @@ class BCOGetFlag(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         scene = context.scene
-        mkdd_bco_tool = scene.mkdd_bco_tool
         
+        column = layout.column()
+        
+        current_material = get_current_material(context)
+        if current_material:
+            column.label(text=f"Flag: 0x{current_material[bco_flag_index]}")
+            column.label(text=f"Attribute: {int(current_material[bco_attribute_index], 16)}")
+            column.label(text=f"Camera Code: {int(current_material[bco_camera_code_index], 16)}")
+            column.label(text=f"Thickness: {int(current_material[bco_thickness_index], 16)}")
+            column.label(text=f"Items Invalid: {int(current_material[bco_itemvalid_index], 16) > 0}")
+            column.label(text=f"Stagger Code: {int(current_material[bco_stagger_index], 16) > 0}")
+            column.label(text=f"Spiral Code: {int(current_material[bco_spiral_index], 16) > 0}")
+            column.label(text=f"Thickness: {int(current_material[bco_geosplash_index], 16)}")
+        else:
+            column.label(text="No current material")
+
         layout.operator("bco.get_current_flag")
+
 
 class BCOUtilities(bpy.types.Panel):
     bl_label = "BCO Utilities"
