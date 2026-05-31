@@ -644,7 +644,7 @@ class BCOGetFlag(bpy.types.Panel):
             column.label(text=f"Items Invalid: {int(current_material[bco_itemvalid_index], 16) > 0}")
             column.label(text=f"Stagger Code: {int(current_material[bco_stagger_index], 16) > 0}")
             column.label(text=f"Spiral Code: {int(current_material[bco_spiral_index], 16) > 0}")
-            column.label(text=f"Thickness: {int(current_material[bco_geosplash_index], 16)}")
+            column.label(text=f"Geosplash Index: {int(current_material[bco_geosplash_index], 16)}")
         else:
             column.label(text="No current material")
 
