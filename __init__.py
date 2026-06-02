@@ -63,6 +63,7 @@ def read_material_flag(material_name):
     if not material_name.startswith(bco_material_name_prefix):
         return None
     material_name = material_name[len(bco_material_name_prefix):]
+    
     material_name = re.sub("[.]\d{3}", "", material_name)
 
     if len(material_name) != 6 and len(material_name) != 22:
@@ -343,6 +344,8 @@ class export_bco_file(bpy.types.Operator, ExportHelper):
             scene_objects = set([o for o in scene_objects if o.visible_get()])
         if self.bco_export_only_selected:
             scene_objects = set([o for o in scene_objects if o.select_get()])
+            
+        print("exporting ", len(scene_objects), " objects")
 
         return scene_objects
 
@@ -360,6 +363,7 @@ class export_bco_file(bpy.types.Operator, ExportHelper):
             col_mats = [slot.material.name for slot in collision_object.material_slots]
             col_mats = [read_material_flag(mat_name) for mat_name in col_mats]
             if not list(filter(lambda x: x is not None, col_mats)):
+                print(f"skipping object {collision_object.name} because it has no collision tris")
                 continue
             col_mats = [chunk_mat_data(mat_info) for mat_info in col_mats]
 
@@ -386,7 +390,9 @@ class export_bco_file(bpy.types.Operator, ExportHelper):
                 used_vertices_cos.append(list(collision_object.matrix_world @ collision_object.data.vertices[used_vertex].co))
 
             for i, object_face in enumerate(object_faces):
-                new_vertices = (used_vertices_map[object_face[0]], used_vertices_map[object_face[1]], used_vertices_map[object_face[2]])
+                new_vertices = (used_vertices_map[object_face[0]] + len(vertices), 
+                                used_vertices_map[object_face[1]] + len(vertices), 
+                                used_vertices_map[object_face[2]] + len(vertices))
                 object_faces[i] = (new_vertices[0], new_vertices[1], new_vertices[2], object_face[3], object_face[4], object_face[5])
 
             vertices.extend(used_vertices_cos)
@@ -400,6 +406,7 @@ class export_bco_file(bpy.types.Operator, ExportHelper):
 
         scene_objects = self.get_export_objects(context)
         vertices, faces = self.get_vertices_faces_from_objects(scene_objects)
+        print(f"exporting {len(vertices)} vertices and {len(faces)} faces")
         if not vertices or not faces:
             return {'CANCELLED'}
         if len(faces) > 2**16:
