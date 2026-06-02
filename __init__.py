@@ -63,6 +63,7 @@ def read_material_flag(material_name):
     if not material_name.startswith(bco_material_name_prefix):
         return None
     material_name = material_name[len(bco_material_name_prefix):]
+    material_name = re.sub("[.]\d{3}", "", material_name)
 
     if len(material_name) != 6 and len(material_name) != 22:
         return None
