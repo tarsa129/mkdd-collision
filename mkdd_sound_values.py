@@ -52,7 +52,7 @@ def write_sound_values(mkdd_bco_tool, final_sound_ids):
     for final_sound_id in final_sound_ids:
         new_item = mkdd_bco_tool.sound_values.add()
         new_item.col_flag = "0x" + final_sound_id[0]
-        new_item.col_attribute = int(final_sound_id[1])
+        new_item.col_attribute = int(final_sound_id[1], 16)
         new_item.sound_id = final_sound_id[2]
 
 def sync_sound_values(mkdd_bco_tool, col_mat_info, incoming_sound_entries = {}):
